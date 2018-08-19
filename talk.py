@@ -5,38 +5,11 @@ import OpenGL.GL as gl
 import moderngl
 import pyassimp
 import numpy as np
+from pyrr import Matrix44
 import os.path
 
 import imgui
 from imgui.integrations.glfw import GlfwRenderer
-
-def perspective(fovy, aspect, z_near, z_far):
-    zmul = (-2.0 * z_near * z_far) / (z_far - z_near)
-    ymul = 1.0 / np.tan(np.radians(fovy) / 2.0)
-    xmul = ymul / aspect
-    
-    return np.array([[xmul, 0.0, 0.0, 0.0],
-                     [0.0, ymul, 0.0, 0.0],
-                     [0.0, 0.0, -1.0, -1.0],
-                     [0.0, 0.0, zmul, 0.0]])
-
-def look_at(center, eye, up):
-    forward = center - eye
-    forward /= np.linalg.norm(forward)
-    side = np.cross(forward, up)
-    side /= np.linalg.norm(side)
-    upward = np.cross(side, forward)
-
-    return np.array([[side[0], upward[0], -forward[0], 0],
-                     [side[1], upward[1], -forward[1], 0],
-                     [side[2], upward[2], -forward[2], 0],
-                     [-eye @ side, -eye @ upward, eye @ forward, 1]])
-
-def rotation(angle):
-    return np.array([[np.cos(angle), 0, np.sin(angle), 0],
-                     [0, 1, 0, 0],
-                     [-np.sin(angle), 0, np.cos(angle), 0],
-                     [0, 0, 0, 1]])
 
 def main():
     window = impl_glfw_init()
@@ -81,18 +54,17 @@ void main() {
     index_vbo = ctx.buffer(mesh.meshes[0].faces)
     vao = ctx.simple_vertex_array(prog, vbo, 'in_vert', 'in_norm', index_buffer=index_vbo)
     uni_mvp = prog['MVP']
+
     # fixed light
     uni_light = prog['light']
     uni_light.write(np.array([2, 2, 2], dtype=np.float32))
     
     width, height = glfw.get_window_size(window)
-    mat_proj = perspective(45, width / height, 0.1, 100.0)
-    mat_view = look_at(np.array([0., 0., 0.]),
-                       np.array([4., 3., 3.]),
-                       np.array([0., 1., 0.]))
-    mat_model = np.eye(4)
-    # XXX why is this backwards?
-    mat_mvp = mat_model @ mat_view @ mat_proj
+    mat_proj = Matrix44.perspective_projection(45, width / height, 0.1, 100.0)
+    mat_view = Matrix44.look_at(np.array([4., 3., 3.]),
+                                       np.array([0., 0., 0.]),
+                                       np.array([0., 1., 0.]))
+    mat_model = Matrix44.identity()
 
     while not glfw.window_should_close(window):
         glfw.poll_events()
@@ -120,16 +92,17 @@ void main() {
         imgui.text("Vertices: {}".format(mesh.meshes[0].vertices.shape[0]))
         imgui.end()
 
+        # TODO: decompose rotation?
         if io.keys_down[glfw.KEY_RIGHT]:
-            mat_model = mat_model @ rotation(-io.delta_time * np.pi)
+            mat_model = mat_model @ Matrix44.from_y_rotation(-io.delta_time * np.pi)
         if io.keys_down[glfw.KEY_LEFT]:
-            mat_model = mat_model @ rotation(io.delta_time * np.pi)
+            mat_model = mat_model @ Matrix44.from_y_rotation(io.delta_time * np.pi)
 
         ctx.clear(0., 0., .4, 0.)
         ctx.enable(moderngl.DEPTH_TEST)
 
         # set model-view-projection matrix
-        mat_mvp = mat_model @ mat_view @ mat_proj
+        mat_mvp = mat_proj * mat_view * mat_model
         uni_mvp.write(mat_mvp.astype('f4'))
         vao.render()
 
