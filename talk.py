@@ -23,17 +23,17 @@ def main():
 
 in vec3 in_vert;
 in vec3 in_norm;
-out vec3 v_vert;
-out vec3 v_norm;
+out vec3 f_vert;
+out vec3 f_norm;
 
 uniform mat4 u_model;
 uniform mat4 u_camera;
 
 void main() {
   vec4 h_vert = u_model * vec4(in_vert, 1); // transformed vert
-  v_vert = vec3(h_vert);
+  f_vert = vec3(h_vert);
   gl_Position = u_camera * h_vert;
-  v_norm = mat3(transpose(inverse(u_model))) * in_norm;
+  f_norm = mat3(transpose(inverse(u_model))) * in_norm;
 }'''
     sin_vert_source = '''
 #version 330 core
@@ -53,7 +53,8 @@ uniform float u_speed[num_waves];
 
 void main() {
   v_vert.xy = in_vert.xy;
-  v_norm.z = 1;
+  v_vert.z = 0;
+  v_norm = vec3(0, 0, 1);
   for (int i = 0; i < num_waves; i++) {
     float dir = dot(u_direction[i], in_vert.xy);
     v_vert.z += u_amplitude[i] * sin(dir * u_frequency[i] + u_time * u_speed[i]);
@@ -67,27 +68,50 @@ void main() {
   gl_Position = u_camera * vec4(v_vert, 1);
 }'''
     frag_source = '''
-    #version 330 core
+#version 330 core
 
-in vec3 v_vert;
-in vec3 v_norm;
+in vec3 f_vert;
+in vec3 f_norm;
 out vec4 color;
 uniform vec3 light;
 uniform float u_ambient;
 uniform float u_diffuse;
 
 void main() {
-  vec3 norm = normalize(v_norm);
-  vec3 light_dir = normalize(light - v_vert);
+  vec3 norm = normalize(f_norm);
+  vec3 light_dir = normalize(light - f_vert);
 
   float diff = max(dot(norm, light_dir), 0.0);
   vec3 diffuse = diff * vec3(1, 0, 0);
   color = vec4(vec3(1, 1, 1) * u_ambient + diffuse * u_diffuse, 1);
 }'''
+    wireframe_source = '''
+#version 330 core
+
+layout (triangles) in;
+layout (line_strip, max_vertices=3) out;
+
+in vec3 v_vert[];
+in vec3 v_norm[];
+out vec3 f_vert;
+out vec3 f_norm;
+
+void main() {
+  for (int i = 0; i < gl_in.length(); i++) {
+    f_vert = v_vert[i];
+    f_norm = v_norm[i];
+    gl_Position = gl_in[i].gl_Position;
+    EmitVertex();
+  }
+  EndPrimitive();
+}'''
+
     prog = ctx.program(vertex_shader=vert_source, fragment_shader=frag_source)
     prog['u_ambient'].value = 0
     prog['u_diffuse'].value = 1
-    prog_plane = ctx.program(vertex_shader=sin_vert_source, fragment_shader=frag_source)
+
+    prog_plane = ctx.program(vertex_shader=sin_vert_source, fragment_shader=frag_source,
+                             geometry_shader=wireframe_source)
     directions = np.random.randn(4,2)
     directions /= np.linalg.norm(directions, axis=1)[:,None]
 
@@ -113,7 +137,7 @@ void main() {
     mat_model = Matrix44.identity()
     mat_camera = mat_proj * mat_view
 
-    x_coords = np.linspace(-1, 1, 10)
+    x_coords = np.linspace(-10., 10., 50)
     plane_points = np.empty((len(x_coords), len(x_coords), 2), dtype=np.float32)
     plane_points[..., 0] = x_coords[:, None]
     plane_points[..., 1] = x_coords
@@ -159,9 +183,17 @@ void main() {
         if clicked_quit or (io.keys_down[glfw.KEY_Q] and io.key_ctrl):
             exit(1)
 
+        if io.keys_down[glfw.KEY_F1]:
+            demo_selection = 0
+        if io.keys_down[glfw.KEY_F2]:
+            demo_selection = 1
+
         imgui.begin("Stats")
         imgui.text("Framerate: {}".format(io.framerate))
-        imgui.text("Vertices: {}".format(mesh.meshes[0].vertices.shape[0]))
+        if demo_selection == 0:
+            imgui.text("Vertices: {}".format(vao.vertices))
+        elif demo_selection == 1:
+            imgui.text("Vertices: {}".format(vao_plane.vertices))
         _, demo_selection = imgui.combo("Demo", demo_selection, ["Monkey", "Plane\0"])
         imgui.end()
 
@@ -186,7 +218,7 @@ void main() {
         elif demo_selection == 1:
             imgui.begin("Params")
             for k in plane_params.keys():
-                changed, plane_params[k] = imgui.input_float(k.capitalize(), plane_params[k])
+                changed, plane_params[k] = imgui.drag_float(k.capitalize(), plane_params[k], 0.01)
                 if changed:
                     v = plane_params[k]
                     prog_plane['u_' + k].value = [v,v,v,v]
