@@ -18,100 +18,15 @@ def main():
 
     mesh = pyassimp.load('monkey.obj')
 
-    vert_source = '''
-#version 330 core
-
-in vec3 in_vert;
-in vec3 in_norm;
-out vec3 f_vert;
-out vec3 f_norm;
-
-uniform mat4 u_model;
-uniform mat4 u_camera;
-
-void main() {
-  vec4 h_vert = u_model * vec4(in_vert, 1); // transformed vert
-  f_vert = vec3(h_vert);
-  gl_Position = u_camera * h_vert;
-  f_norm = mat3(transpose(inverse(u_model))) * in_norm;
-}'''
-    sin_vert_source = '''
-#version 330 core
-
-in vec2 in_vert;
-out vec3 v_vert;
-out vec3 v_norm;
-
-const int num_waves = 4;
-
-uniform mat4 u_camera;
-uniform float u_time;
-uniform float u_amplitude[num_waves];
-uniform vec2 u_direction[num_waves];
-uniform float u_frequency[num_waves];
-uniform float u_speed[num_waves];
-
-void main() {
-  v_vert.xy = in_vert.xy;
-  v_vert.z = 0;
-  v_norm = vec3(0, 0, 1);
-  for (int i = 0; i < num_waves; i++) {
-    float dir = dot(u_direction[i], in_vert.xy);
-    v_vert.z += u_amplitude[i] * sin(dir * u_frequency[i] + u_time * u_speed[i]);
-
-    v_norm.x += -u_frequency[i] * u_direction[i].x * in_vert.x * u_amplitude[i]
-              * cos(dir * u_frequency[i] + u_time * u_speed[i]);
-    v_norm.y += -u_frequency[i] * u_direction[i].y * in_vert.y * u_amplitude[i]
-              * cos(dir * u_frequency[i] + u_time * u_speed[i]);
-  }
-
-  gl_Position = u_camera * vec4(v_vert, 1);
-}'''
-    frag_source = '''
-#version 330 core
-
-in vec3 f_vert;
-in vec3 f_norm;
-out vec4 color;
-uniform vec3 light;
-uniform float u_ambient;
-uniform float u_diffuse;
-
-void main() {
-  vec3 norm = normalize(f_norm);
-  vec3 light_dir = normalize(light - f_vert);
-
-  float diff = max(dot(norm, light_dir), 0.0);
-  vec3 diffuse = diff * vec3(1, 0, 0);
-  color = vec4(vec3(1, 1, 1) * u_ambient + diffuse * u_diffuse, 1);
-}'''
-    wireframe_source = '''
-#version 330 core
-
-layout (triangles) in;
-layout (line_strip, max_vertices=3) out;
-
-in vec3 v_vert[];
-in vec3 v_norm[];
-out vec3 f_vert;
-out vec3 f_norm;
-
-void main() {
-  for (int i = 0; i < gl_in.length(); i++) {
-    f_vert = v_vert[i];
-    f_norm = v_norm[i];
-    gl_Position = gl_in[i].gl_Position;
-    EmitVertex();
-  }
-  EndPrimitive();
-}'''
-
-    prog = ctx.program(vertex_shader=vert_source, fragment_shader=frag_source)
+    with open('model.vert') as vert_file, open('diffuse.frag') as frag_file:
+        prog = ctx.program(vertex_shader=vert_file.read(), fragment_shader=frag_file.read())
     prog['u_ambient'].value = 0
     prog['u_diffuse'].value = 1
 
-    prog_plane = ctx.program(vertex_shader=sin_vert_source, fragment_shader=frag_source,
-                             geometry_shader=wireframe_source)
+    with open('wave.vert') as vert_file, open('diffuse.frag') as frag_file, open('wireframe.geom') as geom_file:
+        prog_plane = ctx.program(vertex_shader=vert_file.read(),
+                                 fragment_shader=frag_file.read(),
+                                 geometry_shader=geom_file.read())
     directions = np.random.randn(4,2)
     directions /= np.linalg.norm(directions, axis=1)[:,None]
 
@@ -156,7 +71,7 @@ void main() {
                                       np.array([0, 0, 1]))
     mat_plane_camera = mat_proj * mat_plane_view
     prog_plane['u_camera'].write(mat_plane_camera.astype('f4'))
-    plane_params = {'amplitude': 0.1, 'frequency': 1, 'speed': 1}
+    plane_params = {'amplitude': 0.1, 'frequency': 1, 'speed': 1, 'steepness': 0.5}
     for k, v in plane_params.items():
         prog_plane['u_' + k].value = [v,v,v,v]
 
