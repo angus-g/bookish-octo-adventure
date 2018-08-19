@@ -25,12 +25,15 @@ in vec3 in_vert;
 in vec3 in_norm;
 out vec3 v_vert;
 out vec3 v_norm;
-uniform mat4 MVP;
+
+uniform mat4 u_model;
+uniform mat4 u_camera;
 
 void main() {
-  gl_Position = MVP * vec4(in_vert, 1);
-  v_vert = in_vert;
-  v_norm = in_norm;
+  vec4 h_vert = vec4(in_vert, 1); // vert in homogeneous coords
+  gl_Position = u_camera * u_model * h_vert;
+  v_vert = vec3(u_model * h_vert);
+  v_norm = mat3(transpose(inverse(u_model))) * in_norm;
 }'''
     frag_source = '''
 #version 330 core
@@ -53,7 +56,8 @@ void main() {
     vbo = ctx.buffer(np.hstack((mesh.meshes[0].vertices, mesh.meshes[0].normals)))
     index_vbo = ctx.buffer(mesh.meshes[0].faces)
     vao = ctx.simple_vertex_array(prog, vbo, 'in_vert', 'in_norm', index_buffer=index_vbo)
-    uni_mvp = prog['MVP']
+    uni_model = prog['u_model']
+    uni_camera = prog['u_camera']
 
     # fixed light
     uni_light = prog['light']
@@ -62,9 +66,10 @@ void main() {
     width, height = glfw.get_window_size(window)
     mat_proj = Matrix44.perspective_projection(45, width / height, 0.1, 100.0)
     mat_view = Matrix44.look_at(np.array([4., 3., 3.]),
-                                       np.array([0., 0., 0.]),
-                                       np.array([0., 1., 0.]))
+                                np.array([0., 0., 0.]),
+                                np.array([0., 1., 0.]))
     mat_model = Matrix44.identity()
+    mat_camera = mat_proj * mat_view
 
     while not glfw.window_should_close(window):
         glfw.poll_events()
@@ -94,16 +99,20 @@ void main() {
 
         # TODO: decompose rotation?
         if io.keys_down[glfw.KEY_RIGHT]:
-            mat_model = mat_model @ Matrix44.from_y_rotation(-io.delta_time * np.pi)
+            mat_model *= Matrix44.from_y_rotation(-io.delta_time * np.pi)
         if io.keys_down[glfw.KEY_LEFT]:
-            mat_model = mat_model @ Matrix44.from_y_rotation(io.delta_time * np.pi)
+            mat_model *= Matrix44.from_y_rotation(io.delta_time * np.pi)
+        if io.keys_down[glfw.KEY_DOWN]:
+            mat_model *= Matrix44.from_x_rotation(-io.delta_time * np.pi)
+        if io.keys_down[glfw.KEY_UP]:
+            mat_model *= Matrix44.from_x_rotation(io.delta_time * np.pi)
 
         ctx.clear(0., 0., .4, 0.)
         ctx.enable(moderngl.DEPTH_TEST)
 
         # set model-view-projection matrix
-        mat_mvp = mat_proj * mat_view * mat_model
-        uni_mvp.write(mat_mvp.astype('f4'))
+        uni_model.write(mat_model.astype('f4'))
+        uni_camera.write(mat_camera.astype('f4'))
         vao.render()
 
         # render gui on top
