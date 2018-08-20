@@ -57,14 +57,23 @@ def init_waves(ctx):
     plane_points = np.empty((len(x_coords), len(x_coords), 2), dtype=np.float32)
     plane_points[..., 0] = x_coords[:, None]
     plane_points[..., 1] = x_coords
-    vbo_plane = ctx.buffer(plane_points)
+
+    """
+    plane_points = np.load('hgrid.npy')[::4,::4,:]
+    plane_points += [100,0]
+    plane_points /= [180, 80]
+    """
+
+    plane_nx, plane_ny, _ = plane_points.shape
+    vbo_plane = ctx.buffer(plane_points.astype('f4'))
+
     plane_indices = []
-    for i in range(len(x_coords)*(len(x_coords) - 1)):
+    for i in range(plane_nx*(plane_ny - 1)):
         # skip end points
-        if (i+1) % len(x_coords) == 0:
+        if (i+1) % plane_nx == 0:
             continue
-        plane_indices.append([i, i+1, i+len(x_coords)])
-        plane_indices.append([i+len(x_coords), i+1, i+len(x_coords)+1])
+        plane_indices.append([i, i+1, i+plane_nx])
+        plane_indices.append([i+plane_nx, i+1, i+plane_nx+1])
     ivbo_plane = ctx.buffer(np.asarray(plane_indices, dtype=np.int32))
     vao_plane = ctx.simple_vertex_array(prog, vbo_plane, 'in_vert', index_buffer=ivbo_plane)
 
