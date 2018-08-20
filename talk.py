@@ -5,7 +5,7 @@ import OpenGL.GL as gl
 import moderngl
 import pyassimp
 import numpy as np
-from pyrr import Matrix44
+from pyrr import Matrix44, Matrix33, Vector3
 import os.path
 
 import imgui
@@ -81,11 +81,8 @@ def main():
         plane_indices.append([i+len(x_coords), i+1, i+len(x_coords)+1])
     ivbo_plane = ctx.buffer(np.asarray(plane_indices, dtype=np.int32))
     vao_plane = ctx.simple_vertex_array(prog_plane, vbo_plane, 'in_vert', index_buffer=ivbo_plane)
-    mat_plane_view = Matrix44.look_at(np.array([5, 5, 5]),
-                                      np.array([0, 0, 0]),
-                                      np.array([0, 0, 1]))
-    mat_plane_camera = mat_proj * mat_plane_view
-    prog_plane['u_camera'].write(mat_plane_camera.astype('f4'))
+    prev_camera_pos = Vector3([5,5,5])
+    last_camera_pos = prev_camera_pos
     plane_params = {'amplitude': 0.08, 'frequency': 3, 'speed': 1, 'steepness': 0.3}
     plane_sphere_radius = 2.5
     plane_sphericity = 0
@@ -95,6 +92,8 @@ def main():
         prog_plane['u_' + k].value = [v,v,v,v]
 
     demo_selection = 0
+    prev_mouse_down = False
+    rot_speed = np.pi
 
     while not glfw.window_should_close(window):
         glfw.poll_events()
@@ -178,6 +177,24 @@ def main():
             prog_plane['u_time'].value = glfw.get_time()
 
             imgui.end()
+
+            if not imgui.is_any_item_active():
+                mx, my = imgui.get_mouse_drag_delta()
+            else:
+                mx, my = (0, 0)
+
+            camera_pos = Matrix33.from_z_rotation(rot_speed * mx / width) * Matrix33.from_x_rotation(rot_speed * my / height) * prev_camera_pos
+            if prev_mouse_down and not io.mouse_down[0]:
+                prev_camera_pos = last_camera_pos
+                camera_pos = last_camera_pos
+            last_camera_pos = camera_pos
+            prev_mouse_down = io.mouse_down[0]
+            mat_plane_view = Matrix44.look_at(camera_pos,
+                                              np.array([0, 0, 0]),
+                                              np.array([0, 0, 1]))
+            mat_plane_camera = mat_proj * mat_plane_view
+            prog_plane['u_camera'].write(mat_plane_camera.astype('f4'))
+
             vao_plane.render()
 
         # render gui on top
