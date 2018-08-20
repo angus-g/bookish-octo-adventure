@@ -3,7 +3,6 @@
 import glfw
 import OpenGL.GL as gl
 import moderngl
-import pyassimp
 import numpy as np
 from pyrr import Matrix44, Matrix33, Vector3
 import os.path
@@ -11,73 +10,8 @@ import os.path
 import imgui
 from imgui.integrations.glfw import GlfwRenderer
 
-def gen_wave_directions():
-    # choose a set of directions
-    directions = np.empty((4,2))
-    primary_direction = np.random.randn(2)
-    directions[0,:] = primary_direction / np.linalg.norm(primary_direction)
-    def rot(theta):
-        theta = np.radians(theta)
-        return np.array([[np.cos(theta), -np.sin(theta)],
-                         [np.sin(theta),  np.cos(theta)]])
-    for i in range(1,4):
-        directions[i,:] = rot(np.random.randn() * 30) @ directions[0,:]
-
-    return directions
-
-def init_model(ctx):
-    with open('model.vert') as vert_file, open('diffuse.frag') as frag_file:
-        prog = ctx.program(vertex_shader=vert_file.read(), fragment_shader=frag_file.read())
-    prog['u_ambient'].value = 0
-    prog['u_diffuse'].value = 1
-
-    mesh = pyassimp.load('monkey.obj')
-
-    vbo = ctx.buffer(np.hstack((mesh.meshes[0].vertices, mesh.meshes[0].normals)))
-    index_vbo = ctx.buffer(mesh.meshes[0].faces)
-    vao = ctx.simple_vertex_array(prog, vbo, 'in_vert', 'in_norm', index_buffer=index_vbo)
-
-    # fixed light
-    prog['light'].write(np.array([2, 2, 2], dtype=np.float32))
-
-    return vao
-
-def init_waves(ctx):
-    with open('wave.vert') as vert_file, open('diffuse.frag') as frag_file, open('pass.geom') as geom_file:
-        prog = ctx.program(vertex_shader=vert_file.read(),
-                           fragment_shader=frag_file.read(),
-                           geometry_shader=geom_file.read())
-
-    prog['u_direction'].write(gen_wave_directions().astype('f4'))
-    prog['u_ambient'].value = .1
-    prog['u_diffuse'].value = .9
-    prog['light'].write(np.array([2,2,2], dtype=np.float32))
-
-    x_coords = np.linspace(-10., 10., 100)
-    plane_points = np.empty((len(x_coords), len(x_coords), 2), dtype=np.float32)
-    plane_points[..., 0] = x_coords[:, None]
-    plane_points[..., 1] = x_coords
-
-    """
-    plane_points = np.load('hgrid.npy')[::4,::4,:]
-    plane_points += [100,0]
-    plane_points /= [180, 80]
-    """
-
-    plane_nx, plane_ny, _ = plane_points.shape
-    vbo_plane = ctx.buffer(plane_points.astype('f4'))
-
-    plane_indices = []
-    for i in range(plane_nx*(plane_ny - 1)):
-        # skip end points
-        if (i+1) % plane_nx == 0:
-            continue
-        plane_indices.append([i, i+1, i+plane_nx])
-        plane_indices.append([i+plane_nx, i+1, i+plane_nx+1])
-    ivbo_plane = ctx.buffer(np.asarray(plane_indices, dtype=np.int32))
-    vao_plane = ctx.simple_vertex_array(prog, vbo_plane, 'in_vert', index_buffer=ivbo_plane)
-
-    return vao_plane
+from waves import Waves
+from model import Model
 
 def main():
     # initialisation
@@ -87,22 +21,12 @@ def main():
     width, height = glfw.get_window_size(window)
 
     # initialise model demo
-    vao = init_model(ctx)
-    prog = vao.program
-
-    # load each program
-    mat_proj = Matrix44.perspective_projection(45, width / height, 0.1, 100.0)
-    mat_view = Matrix44.look_at(np.array([4., 3., 3.]),
-                                np.array([0., 0., 0.]),
-                                np.array([0., 1., 0.]))
-    mat_model = Matrix44.identity()
-    mat_camera = mat_proj * mat_view
-    prog['u_model'].write(mat_model.astype('f4'))
-    prog['u_normal'].write(mat_model.astype('f4'))
+    model = Model(ctx, (width, height))
+    prog = model.prog
 
     # initialise waves demo
-    vao_plane = init_waves(ctx)
-    prog_plane = vao_plane.program
+    waves = Waves(ctx, (width, height))
+    prog_plane = waves.prog
 
     prev_camera_pos = Vector3([5,5,5])
     last_camera_pos = prev_camera_pos
@@ -151,9 +75,9 @@ def main():
         imgui.begin("Stats")
         imgui.text("Framerate: {}".format(io.framerate))
         if demo_selection == 0:
-            imgui.text("Vertices: {}".format(vao.vertices))
+            imgui.text("Vertices: {}".format(model.vao.vertices))
         elif demo_selection == 1:
-            imgui.text("Vertices: {}".format(vao_plane.vertices))
+            imgui.text("Vertices: {}".format(waves.vao.vertices))
         _, demo_selection = imgui.combo("Demo", demo_selection, ["Monkey", "Plane\0"])
         imgui.end()
 
@@ -180,10 +104,8 @@ def main():
             # we don't strictly need to take the inverse transpose
             # if the model matrix doesn't scale
             if changed:
-                prog['u_model'].write(mat_model.astype('f4'))
-                prog['u_normal'].write(mat_model.inverse.transpose().astype('f4').tobytes())
-            prog['u_camera'].write(mat_camera.astype('f4'))
-            vao.render()
+                model.update_camera()
+            model.render()
         elif demo_selection == 1:
             imgui.begin("Params")
             for k in plane_params.keys():
@@ -201,9 +123,7 @@ def main():
                 prog_plane['u_blend'].value = plane_sphericity
 
             if imgui.button("Randomise directions"):
-                prog_plane['u_direction'].write(gen_wave_directions().astype('f4'))
-
-            prog_plane['u_time'].value = glfw.get_time()
+                waves.gen_wave_directions()
 
             imgui.end()
 
@@ -218,13 +138,8 @@ def main():
                 camera_pos = last_camera_pos
             last_camera_pos = camera_pos
             prev_mouse_down = io.mouse_down[0]
-            mat_plane_view = Matrix44.look_at(camera_pos,
-                                              np.array([0, 0, 0]),
-                                              np.array([0, 0, 1]))
-            mat_plane_camera = mat_proj * mat_plane_view
-            prog_plane['u_camera'].write(mat_plane_camera.astype('f4'))
-
-            vao_plane.render()
+            waves.update_camera(camera_pos)
+            waves.render(glfw.get_time())
 
         # render gui on top
         imgui.render()
