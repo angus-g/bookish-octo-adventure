@@ -25,47 +25,33 @@ def gen_wave_directions():
 
     return directions
 
-def main():
-    window = impl_glfw_init()
-    impl = GlfwRenderer(window)
-    ctx = moderngl.create_context()
-
-    mesh = pyassimp.load('monkey.obj')
-
+def init_model(ctx):
     with open('model.vert') as vert_file, open('diffuse.frag') as frag_file:
         prog = ctx.program(vertex_shader=vert_file.read(), fragment_shader=frag_file.read())
     prog['u_ambient'].value = 0
     prog['u_diffuse'].value = 1
 
-    with open('wave.vert') as vert_file, open('diffuse.frag') as frag_file, open('pass.geom') as geom_file:
-        prog_plane = ctx.program(vertex_shader=vert_file.read(),
-                                 fragment_shader=frag_file.read(),
-                                 geometry_shader=geom_file.read())
-
-    prog_plane['u_direction'].write(gen_wave_directions().astype('f4'))
-    prog_plane['u_ambient'].value = .1
-    prog_plane['u_diffuse'].value = .9
+    mesh = pyassimp.load('monkey.obj')
 
     vbo = ctx.buffer(np.hstack((mesh.meshes[0].vertices, mesh.meshes[0].normals)))
     index_vbo = ctx.buffer(mesh.meshes[0].faces)
     vao = ctx.simple_vertex_array(prog, vbo, 'in_vert', 'in_norm', index_buffer=index_vbo)
-    uni_model = prog['u_model']
-    uni_normal = prog['u_normal']
-    uni_camera = prog['u_camera']
 
     # fixed light
-    uni_light = prog['light']
-    uni_light.write(np.array([2, 2, 2], dtype=np.float32))
-    
-    width, height = glfw.get_window_size(window)
-    mat_proj = Matrix44.perspective_projection(45, width / height, 0.1, 100.0)
-    mat_view = Matrix44.look_at(np.array([4., 3., 3.]),
-                                np.array([0., 0., 0.]),
-                                np.array([0., 1., 0.]))
-    mat_model = Matrix44.identity()
-    mat_camera = mat_proj * mat_view
-    uni_model.write(mat_model.astype('f4'))
-    uni_normal.write(mat_model.astype('f4'))
+    prog['light'].write(np.array([2, 2, 2], dtype=np.float32))
+
+    return vao
+
+def init_waves(ctx):
+    with open('wave.vert') as vert_file, open('diffuse.frag') as frag_file, open('pass.geom') as geom_file:
+        prog = ctx.program(vertex_shader=vert_file.read(),
+                           fragment_shader=frag_file.read(),
+                           geometry_shader=geom_file.read())
+
+    prog['u_direction'].write(gen_wave_directions().astype('f4'))
+    prog['u_ambient'].value = .1
+    prog['u_diffuse'].value = .9
+    prog['light'].write(np.array([2,2,2], dtype=np.float32))
 
     x_coords = np.linspace(-10., 10., 100)
     plane_points = np.empty((len(x_coords), len(x_coords), 2), dtype=np.float32)
@@ -80,7 +66,35 @@ def main():
         plane_indices.append([i, i+1, i+len(x_coords)])
         plane_indices.append([i+len(x_coords), i+1, i+len(x_coords)+1])
     ivbo_plane = ctx.buffer(np.asarray(plane_indices, dtype=np.int32))
-    vao_plane = ctx.simple_vertex_array(prog_plane, vbo_plane, 'in_vert', index_buffer=ivbo_plane)
+    vao_plane = ctx.simple_vertex_array(prog, vbo_plane, 'in_vert', index_buffer=ivbo_plane)
+
+    return vao_plane
+
+def main():
+    # initialisation
+    window = impl_glfw_init()
+    impl = GlfwRenderer(window)
+    ctx = moderngl.create_context()
+    width, height = glfw.get_window_size(window)
+
+    # initialise model demo
+    vao = init_model(ctx)
+    prog = vao.program
+
+    # load each program
+    mat_proj = Matrix44.perspective_projection(45, width / height, 0.1, 100.0)
+    mat_view = Matrix44.look_at(np.array([4., 3., 3.]),
+                                np.array([0., 0., 0.]),
+                                np.array([0., 1., 0.]))
+    mat_model = Matrix44.identity()
+    mat_camera = mat_proj * mat_view
+    prog['u_model'].write(mat_model.astype('f4'))
+    prog['u_normal'].write(mat_model.astype('f4'))
+
+    # initialise waves demo
+    vao_plane = init_waves(ctx)
+    prog_plane = vao_plane.program
+
     prev_camera_pos = Vector3([5,5,5])
     last_camera_pos = prev_camera_pos
     plane_params = {'amplitude': 0.08, 'frequency': 3, 'speed': 1, 'steepness': 0.3}
@@ -91,6 +105,7 @@ def main():
     for k, v in plane_params.items():
         prog_plane['u_' + k].value = [v,v,v,v]
 
+    # main loop state
     demo_selection = 0
     prev_mouse_down = False
     rot_speed = np.pi
@@ -99,26 +114,29 @@ def main():
         glfw.poll_events()
         impl.process_inputs()
         imgui.new_frame()
-
         io = imgui.get_io()
 
+        # set up the menu bar
         clicked_quit = False
+        clicked_demo1 = False
+        clicked_demo2 = False
         if imgui.begin_main_menu_bar():
             if imgui.begin_menu("File", True):
-                clicked_quit, selected_quit = imgui.menu_item(
-                    'Quit', 'Ctrl+Q', False, True
-                )
+                clicked_quit, _ = imgui.menu_item('Quit', 'Ctrl+Q', False, True)
+                imgui.end_menu()
 
-
+            if imgui.begin_menu("Demos", True):
+                clicked_demo1, _ = imgui.menu_item('Model', 'F1', False, True)
+                clicked_demo2, _ = imgui.menu_item('Waves', 'F2', False, True)
                 imgui.end_menu()
             imgui.end_main_menu_bar()
 
         if clicked_quit or (io.keys_down[glfw.KEY_Q] and io.key_ctrl):
             exit(1)
 
-        if io.keys_down[glfw.KEY_F1]:
+        if io.keys_down[glfw.KEY_F1] or clicked_demo1:
             demo_selection = 0
-        if io.keys_down[glfw.KEY_F2]:
+        if io.keys_down[glfw.KEY_F2] or clicked_demo2:
             demo_selection = 1
 
         imgui.begin("Stats")
@@ -150,10 +168,12 @@ def main():
                 changed = True
 
             # set model-view-projection matrix
+            # we don't strictly need to take the inverse transpose
+            # if the model matrix doesn't scale
             if changed:
-                uni_model.write(mat_model.astype('f4'))
-                uni_normal.write(mat_model.inverse.transpose().astype('f4').tobytes())
-            uni_camera.write(mat_camera.astype('f4'))
+                prog['u_model'].write(mat_model.astype('f4'))
+                prog['u_normal'].write(mat_model.inverse.transpose().astype('f4').tobytes())
+            prog['u_camera'].write(mat_camera.astype('f4'))
             vao.render()
         elif demo_selection == 1:
             imgui.begin("Params")
@@ -183,7 +203,7 @@ def main():
             else:
                 mx, my = (0, 0)
 
-            camera_pos = Matrix33.from_z_rotation(rot_speed * mx / width) * Matrix33.from_x_rotation(rot_speed * my / height) * prev_camera_pos
+            camera_pos = Matrix33.from_z_rotation(rot_speed * mx / width) * Matrix33.from_x_rotation(-rot_speed * my / height) * prev_camera_pos
             if prev_mouse_down and not io.mouse_down[0]:
                 prev_camera_pos = last_camera_pos
                 camera_pos = last_camera_pos
