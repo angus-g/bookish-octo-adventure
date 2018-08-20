@@ -11,6 +11,20 @@ import os.path
 import imgui
 from imgui.integrations.glfw import GlfwRenderer
 
+def gen_wave_directions():
+    # choose a set of directions
+    directions = np.empty((4,2))
+    primary_direction = np.random.randn(2)
+    directions[0,:] = primary_direction / np.linalg.norm(primary_direction)
+    def rot(theta):
+        theta = np.radians(theta)
+        return np.array([[np.cos(theta), -np.sin(theta)],
+                         [np.sin(theta),  np.cos(theta)]])
+    for i in range(1,4):
+        directions[i,:] = rot(np.random.randn() * 30) @ directions[0,:]
+
+    return directions
+
 def main():
     window = impl_glfw_init()
     impl = GlfwRenderer(window)
@@ -23,21 +37,20 @@ def main():
     prog['u_ambient'].value = 0
     prog['u_diffuse'].value = 1
 
-    with open('wave.vert') as vert_file, open('diffuse.frag') as frag_file, open('wireframe.geom') as geom_file:
+    with open('wave.vert') as vert_file, open('diffuse.frag') as frag_file, open('pass.geom') as geom_file:
         prog_plane = ctx.program(vertex_shader=vert_file.read(),
                                  fragment_shader=frag_file.read(),
                                  geometry_shader=geom_file.read())
-    directions = np.random.randn(4,2)
-    directions /= np.linalg.norm(directions, axis=1)[:,None]
 
-    prog_plane['u_direction'].write(directions.astype('f4'))
-    prog_plane['u_ambient'].value = .5
-    prog_plane['u_diffuse'].value = .5
+    prog_plane['u_direction'].write(gen_wave_directions().astype('f4'))
+    prog_plane['u_ambient'].value = .1
+    prog_plane['u_diffuse'].value = .9
 
     vbo = ctx.buffer(np.hstack((mesh.meshes[0].vertices, mesh.meshes[0].normals)))
     index_vbo = ctx.buffer(mesh.meshes[0].faces)
     vao = ctx.simple_vertex_array(prog, vbo, 'in_vert', 'in_norm', index_buffer=index_vbo)
     uni_model = prog['u_model']
+    uni_normal = prog['u_normal']
     uni_camera = prog['u_camera']
 
     # fixed light
@@ -51,8 +64,10 @@ def main():
                                 np.array([0., 1., 0.]))
     mat_model = Matrix44.identity()
     mat_camera = mat_proj * mat_view
+    uni_model.write(mat_model.astype('f4'))
+    uni_normal.write(mat_model.astype('f4'))
 
-    x_coords = np.linspace(-10., 10., 50)
+    x_coords = np.linspace(-10., 10., 100)
     plane_points = np.empty((len(x_coords), len(x_coords), 2), dtype=np.float32)
     plane_points[..., 0] = x_coords[:, None]
     plane_points[..., 1] = x_coords
@@ -71,7 +86,11 @@ def main():
                                       np.array([0, 0, 1]))
     mat_plane_camera = mat_proj * mat_plane_view
     prog_plane['u_camera'].write(mat_plane_camera.astype('f4'))
-    plane_params = {'amplitude': 0.1, 'frequency': 1, 'speed': 1, 'steepness': 0.5}
+    plane_params = {'amplitude': 0.08, 'frequency': 3, 'speed': 1, 'steepness': 0.3}
+    plane_sphere_radius = 2.5
+    plane_sphericity = 0
+    prog_plane['u_radius'].value = plane_sphere_radius
+    prog_plane['u_blend'].value = plane_sphericity
     for k, v in plane_params.items():
         prog_plane['u_' + k].value = [v,v,v,v]
 
@@ -112,22 +131,29 @@ def main():
         _, demo_selection = imgui.combo("Demo", demo_selection, ["Monkey", "Plane\0"])
         imgui.end()
 
-        ctx.clear(0., 0., .4, 0.)
+        ctx.clear(.2, .2, .2, 0.)
         ctx.enable(moderngl.DEPTH_TEST)
 
         if demo_selection == 0:
             # TODO: decompose rotation?
+            changed = False
             if io.keys_down[glfw.KEY_RIGHT]:
                 mat_model *= Matrix44.from_y_rotation(-io.delta_time * np.pi)
+                changed = True
             if io.keys_down[glfw.KEY_LEFT]:
                 mat_model *= Matrix44.from_y_rotation(io.delta_time * np.pi)
+                changed = True
             if io.keys_down[glfw.KEY_DOWN]:
                 mat_model *= Matrix44.from_x_rotation(-io.delta_time * np.pi)
+                changed = True
             if io.keys_down[glfw.KEY_UP]:
                 mat_model *= Matrix44.from_x_rotation(io.delta_time * np.pi)
+                changed = True
 
             # set model-view-projection matrix
-            uni_model.write(mat_model.astype('f4'))
+            if changed:
+                uni_model.write(mat_model.astype('f4'))
+                uni_normal.write(mat_model.inverse.transpose().astype('f4').tobytes())
             uni_camera.write(mat_camera.astype('f4'))
             vao.render()
         elif demo_selection == 1:
@@ -137,6 +163,17 @@ def main():
                 if changed:
                     v = plane_params[k]
                     prog_plane['u_' + k].value = [v,v,v,v]
+
+            changed, plane_sphere_radius = imgui.drag_float("Radius", plane_sphere_radius, 0.1)
+            if changed:
+                prog_plane['u_radius'].value = plane_sphere_radius
+
+            changed, plane_sphericity = imgui.drag_float("Sphericity", plane_sphericity, 0.01, 0, 1)
+            if changed:
+                prog_plane['u_blend'].value = plane_sphericity
+
+            if imgui.button("Randomise directions"):
+                prog_plane['u_direction'].write(gen_wave_directions().astype('f4'))
 
             prog_plane['u_time'].value = glfw.get_time()
 
