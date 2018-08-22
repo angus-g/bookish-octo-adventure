@@ -7,7 +7,7 @@ class Waves(object):
         if wireframe:
             geom_filename = 'wireframe.geom'
         
-        with open('wave.vert') as vert_file, open('diffuse.frag') as frag_file, open(geom_filename) as geom_file:
+        with open('wave.vert') as vert_file, open('wave-diffuse.frag') as frag_file, open(geom_filename) as geom_file:
             self.prog = context.program(vertex_shader=vert_file.read(),
                                         fragment_shader=frag_file.read(),
                                         geometry_shader=geom_file.read())

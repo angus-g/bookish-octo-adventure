@@ -6,6 +6,7 @@ import moderngl
 import numpy as np
 from pyrr import Matrix44, Matrix33, Vector3
 import os.path
+import glob
 
 import imgui
 from imgui.integrations.glfw import GlfwRenderer
@@ -43,6 +44,11 @@ def main():
     prev_mouse_down = False
     rot_speed = np.pi
 
+    files = glob.glob('*.obj')
+    files[-1] += '\0'
+    filename_selection = -1
+    unwrap_frac = 0.
+
     while not glfw.window_should_close(window):
         glfw.poll_events()
         impl.process_inputs()
@@ -78,33 +84,46 @@ def main():
             imgui.text("Vertices: {}".format(model.vao.vertices))
         elif demo_selection == 1:
             imgui.text("Vertices: {}".format(waves.vao.vertices))
-        _, demo_selection = imgui.combo("Demo", demo_selection, ["Monkey", "Plane\0"])
+        _, demo_selection = imgui.combo("Demo", demo_selection, ["Model", "Plane\0"])
         imgui.end()
 
         ctx.clear(.2, .2, .2, 0.)
         ctx.enable(moderngl.DEPTH_TEST)
 
         if demo_selection == 0:
+            imgui.begin("Model")
+            filename_changed, filename_selection = imgui.combo("Filename", filename_selection, files)
+            _, unwrap_frac = imgui.drag_float("Unwrap", unwrap_frac, 0.01, 0, 1)
+            imgui.end()
+
+            if filename_changed:
+                if filename_selection == len(files) - 1:
+                    model.load_mesh(files[filename_selection][:-1])
+                else:
+                    model.load_mesh(files[filename_selection])
+
+            model.prog['u_unwrap_frac'].value = unwrap_frac
+
             # TODO: decompose rotation?
             changed = False
             if io.keys_down[glfw.KEY_RIGHT]:
-                mat_model *= Matrix44.from_y_rotation(-io.delta_time * np.pi)
+                model.mat_model *= Matrix44.from_y_rotation(-io.delta_time * np.pi)
                 changed = True
             if io.keys_down[glfw.KEY_LEFT]:
-                mat_model *= Matrix44.from_y_rotation(io.delta_time * np.pi)
+                model.mat_model *= Matrix44.from_y_rotation(io.delta_time * np.pi)
                 changed = True
             if io.keys_down[glfw.KEY_DOWN]:
-                mat_model *= Matrix44.from_x_rotation(-io.delta_time * np.pi)
+                model.mat_model *= Matrix44.from_x_rotation(-io.delta_time * np.pi)
                 changed = True
             if io.keys_down[glfw.KEY_UP]:
-                mat_model *= Matrix44.from_x_rotation(io.delta_time * np.pi)
+                model.mat_model *= Matrix44.from_x_rotation(io.delta_time * np.pi)
                 changed = True
 
             # set model-view-projection matrix
             # we don't strictly need to take the inverse transpose
             # if the model matrix doesn't scale
             if changed:
-                model.update_camera()
+                model.update_model_transform()
             model.render()
         elif demo_selection == 1:
             imgui.begin("Params")

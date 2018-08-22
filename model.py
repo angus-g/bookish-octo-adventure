@@ -4,18 +4,19 @@ from pyrr import Matrix44
 
 class Model(object):
     def __init__(self, context, dims):
-        with open('model.vert') as vert_file, open('diffuse.frag') as frag_file:
+        self.context = context
+
+        with open('model.vert') as vert_file, open('model-diffuse.frag') as frag_file:
             self.prog = context.program(vertex_shader=vert_file.read(), fragment_shader=frag_file.read())
-            
+
+        # shader colors
         self.prog['u_ambient'].value = 0
         self.prog['u_diffuse'].value = 1
 
-        self.mesh = pyassimp.load('monkey.obj')
+        # unwrap fraction
+        self.prog['u_unwrap_frac'].value = 0
 
-        vbo = context.buffer(np.hstack((self.mesh.meshes[0].vertices,
-                                        self.mesh.meshes[0].normals)))
-        index_vbo = context.buffer(self.mesh.meshes[0].faces)
-        self.vao = context.simple_vertex_array(self.prog, vbo, 'in_vert', 'in_norm', index_buffer=index_vbo)
+        self.load_mesh('monkey.obj')
 
         # fixed light
         self.prog['light'].write(np.array([2, 2, 2], dtype=np.float32))
@@ -37,3 +38,15 @@ class Model(object):
 
     def render(self):
         self.vao.render()
+
+    def load_mesh(self, filename):
+        self.filename = filename
+        self.mesh = pyassimp.load(self.filename)
+        texcoords = self.mesh.meshes[0].texturecoords.squeeze()
+        if texcoords.size == 0:
+            texcoords = np.zeros_like(self.mesh.meshes[0].vertices)
+        vbo = self.context.buffer(np.hstack((self.mesh.meshes[0].vertices,
+                                             self.mesh.meshes[0].normals,
+                                             texcoords[:,:2])))
+        index_vbo = self.context.buffer(self.mesh.meshes[0].faces)
+        self.vao = self.context.simple_vertex_array(self.prog, vbo, 'in_vert', 'in_norm', 'in_texcoord', index_buffer=index_vbo)
