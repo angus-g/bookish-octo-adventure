@@ -3,11 +3,11 @@ from pyrr import Matrix44
 
 class Waves(object):
     def __init__(self, context, dims, wireframe=False):
-        geom_filename = 'pass.geom'
+        geom_filename = 'shaders/pass.geom'
         if wireframe:
-            geom_filename = 'wireframe.geom'
+            geom_filename = 'shaders/wireframe.geom'
         
-        with open('wave.vert') as vert_file, open('wave-diffuse.frag') as frag_file, open(geom_filename) as geom_file:
+        with open('shaders/wave.vert') as vert_file, open('shaders/wave-diffuse.frag') as frag_file, open(geom_filename) as geom_file:
             self.prog = context.program(vertex_shader=vert_file.read(),
                                         fragment_shader=frag_file.read(),
                                         geometry_shader=geom_file.read())

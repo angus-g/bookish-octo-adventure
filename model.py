@@ -6,7 +6,7 @@ class Model(object):
     def __init__(self, context, dims):
         self.context = context
 
-        with open('model.vert') as vert_file, open('model-diffuse.frag') as frag_file:
+        with open('shaders/model.vert') as vert_file, open('shaders/model-diffuse.frag') as frag_file:
             self.prog = context.program(vertex_shader=vert_file.read(), fragment_shader=frag_file.read())
 
         # shader colors
@@ -16,7 +16,7 @@ class Model(object):
         # unwrap fraction
         self.prog['u_unwrap_frac'].value = 0
 
-        self.load_mesh('monkey.obj')
+        self.load_mesh('models/monkey.obj')
 
         # fixed light
         self.prog['light'].write(np.array([2, 2, 2], dtype=np.float32))
