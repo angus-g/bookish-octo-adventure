@@ -14,7 +14,7 @@ class C(g.App):
         self.gui = {
             'u_unwrap': 0,
             'animate': False,
-            'u_land_color': (.1, .1, 0.),
+            'u_color': (.1, .1, 0.),
         }
 
         # load shaders
@@ -27,20 +27,23 @@ class C(g.App):
         self.prog['m_mvp'].write(self.camera['mat'])
 
         # load 1deg hgrid, halve the number of points so that the grid agrees with topography
+        decimation = 4
         grid = np.load('hgrid.npy')
-        decimation = 2
-        points = grid[::decimation,::decimation,:]
-        #points = grid[::decimation,:100:decimation,:]
-        ny, nx, _ = points.shape
+        #points = grid[::decimation,::decimation,:]
+        grid = grid[:-1:decimation,:-1:decimation,:]
+        ny, nx, _ = grid.shape
 
         # load 1deg topography
         topog_raw = np.load('topog.npy')
-        topog = np.zeros((ny,nx))
-        # provoking vertex is (ny+1, nx), so we'll set the right region with our data
-        topog[1:,:-1] = np.roll(topog_raw, 90, axis=1)[::decimation // 2,::decimation // 2]
-        points = np.dstack((points, topog))
+        # centre nearer australia
+        topog = topog_raw[::decimation,::decimation]
+        topog = np.repeat(np.repeat(topog, 2, axis=0), 2, axis=1)
 
+        points = np.dstack((grid, topog))
         vbo = self.ctx.buffer(points.astype('f4'))
+
+        points_flat = np.dstack((grid, np.zeros(topog.shape)))
+        vbo_flat = self.ctx.buffer(points_flat.astype('f4'))
 
         # the tricky bit: construct the index array
         indices = []
@@ -52,12 +55,13 @@ class C(g.App):
 
         ivbo = self.ctx.buffer(np.asarray(indices, dtype=np.int32))
         self.vao = self.ctx.simple_vertex_array(self.prog, vbo, 'aPos', index_buffer=ivbo)
+        self.vao_flat = self.ctx.simple_vertex_array(self.prog, vbo_flat, 'aPos', index_buffer=ivbo)
 
     def draw_gui(self):
         imgui.begin('Controls')
         _, self.gui['animate'] = imgui.checkbox('Animate', self.gui['animate'])
         _, self.gui['u_unwrap'] = imgui.drag_float('Unwrap', self.gui['u_unwrap'], 0.01, 0, 1)
-        _, self.gui['u_land_color'] = imgui.color_edit3('Land', *self.gui['u_land_color'])
+        _, self.gui['u_color'] = imgui.color_edit3('Land', *self.gui['u_color'])
         imgui.end()
 
     def render(self):
@@ -67,13 +71,22 @@ class C(g.App):
         
         self.ctx.clear(0., 0., 0., 0.)
         self.ctx.enable(moderngl.DEPTH_TEST)
+        self.ctx.enable(moderngl.BLEND)
         if self.gui['animate']:
             self.gui['u_unwrap'] = (np.sin(self.time()) + 1) / 2
 
         # set uniforms
         self.prog['u_unwrap'].value = self.gui['u_unwrap']
-        self.prog['u_land_color'].value = self.gui['u_land_color']
+
+        # render topography
+        self.prog['u_color'].value = self.gui['u_color'] + (1.,)
+        self.prog['u_z_offset'].value = 0.
         self.vao.render()
+
+        # render water surface
+        self.prog['u_color'].value = (.3, .3, 1., 0.5)
+        self.prog['u_z_offset'].value = 0.01
+        self.vao_flat.render()
 
 if __name__ == '__main__':
     C().run()
