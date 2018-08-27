@@ -1,6 +1,8 @@
 #version 450 core
 
 in vec3 aPos;
+in vec2 aQuad;
+
 out VS_OUT {
   vec4 color;
 } vs_out;
@@ -11,6 +13,7 @@ uniform float u_z_offset;
 uniform vec4 u_color;
 
 const float rad_min = 0.8;
+const float separation = 1;
 
 void main() {
   vec4 vPos = vec4(aPos, 1.0);
@@ -23,6 +26,8 @@ void main() {
     depth = 0;
     vPos.z = -u_z_offset;
   }
+
+  vPos.xy += aQuad * separation;
 
   // elevation and azimuth in spherical coords
   float phi = radians(aPos.x * 180 - 100);
