@@ -28,15 +28,14 @@ class C(g.App):
         # load 1deg hgrid, halve the number of points so that the grid agrees with topography
         decimation = 2
         pieces = 15
-        grid = np.load('hgrid.npy')
+        data = np.load('data.npz')
         #points = grid[::decimation,::decimation,:]
-        grid = grid[:-1:decimation,:-1:decimation,:]
+        grid = data['grid'][:-1:decimation,:-1:decimation,:]
         ny, nx, _ = grid.shape
 
         # load 1deg topography
-        topog_raw = np.load('topog.npy')
         # centre nearer australia
-        topog = topog_raw[::decimation,::decimation]
+        topog = data['topo'][::decimation,::decimation]
         topog = np.repeat(np.repeat(topog, 2, axis=0), 2, axis=1)
 
         points = np.dstack((grid, topog)).reshape(-1, 3)
