@@ -1,7 +1,8 @@
 import glfw
 import moderngl
+import numpy as np
 from PIL import Image
-from pyrr import Matrix44
+from pyrr import Matrix44, Matrix33, Vector3
 
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module='imgui.integrations')
@@ -26,6 +27,12 @@ class App(object):
         self.window = glfw.create_window(int(self.width), int(self.height),
                                          window_name, None, None)
         glfw.make_context_current(self.window)
+        def viewport_func(window, width, height):
+            self.width = width
+            self.height = height
+            self.update_camera(update_proj=True)
+            self.ctx.viewport = (0, 0, self.width, self.height)
+        glfw.set_framebuffer_size_callback(self.window, viewport_func)
 
         if not self.window:
             glfw.terminate()
@@ -36,19 +43,53 @@ class App(object):
             self.gui_impl = GlfwRenderer(self.window)
 
         self.ctx = moderngl.create_context()
+        self.ctx.viewport = (0, 0, self.width, self.height)
 
     def init_camera(self, pos=[0, 0, 0]):
         self.camera = {
-            'center': pos, 'look_at': [0, 0, 0], 'up': [0, 1, 0]
+            'center': Vector3(pos),
+            'saved_center': Vector3(pos),
+            'look_at': Vector3(),
+            'up': Vector3([0, 1, 0]),
+            'rot_speed': np.pi,
+            'mouse_down': False,
         }
-        self.camera['proj'] = Matrix44.perspective_projection(45.0, self.width / self.height, 0.1, 1000.0)
+        self.update_camera(update_proj=True)
+
+    def update_camera(self, update_proj=False):
+        if update_proj:
+            self.camera['proj'] = Matrix44.perspective_projection(45.0, self.width / self.height, 0.1, 1000.0)
+
         self.camera['view'] = Matrix44.look_at(self.camera['center'],
                                                self.camera['look_at'],
                                                self.camera['up'])
+
+        self.camera['mat'] = (self.camera['proj'] * self.camera['view']).astype('f4')
+
+    def drag_camera(self):
+        if not imgui.is_any_item_active():
+            mx, my = imgui.get_mouse_drag_delta()
+        else:
+            mx, my = 0, 0
+
+        # if we just released the mouse, save the new camera position
+        if self.camera['mouse_down'] and not self.io.mouse_down[0]:
+            self.camera['saved_center'] = self.camera['center']
+        self.camera['mouse_down'] = self.io.mouse_down[0]
+
+        # no drag, don't do anything
+        if mx == 0 and my == 0:
+            return False
+
+        # calculate the camera position according to the current drag
+        # this is a rotation relative to the saved position
+        self.camera['center'] = Matrix33.from_y_rotation(self.camera['rot_speed'] * mx / self.width) \
+            * Matrix33.from_x_rotation(self.camera['rot_speed'] * my / self.height) \
+            * self.camera['saved_center']
         self.update_camera()
 
-    def update_camera(self):
-        self.camera['mat'] = (self.camera['proj'] * self.camera['view']).astype('f4')
+        # camera has changed
+        return True
 
     def texture(self, filename):
         img = Image.open(filename).convert('RGB')
@@ -64,6 +105,7 @@ class App(object):
             glfw.poll_events()
             if self.gui_impl is not None:
                 self.gui_impl.process_inputs()
+                self.io = imgui.get_io()
                 imgui.new_frame()
 
             if glfw.get_key(self.window, glfw.KEY_ESCAPE) == glfw.PRESS:

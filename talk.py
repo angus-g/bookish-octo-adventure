@@ -53,6 +53,8 @@ class C(g.App):
 
     def render(self):
         self.draw_gui()
+        if self.drag_camera():
+            self.prog['m_mvp'].write(self.camera['mat'])
         
         self.ctx.clear(0., 0., 0., 0.)
         if self.gui['animate']:
