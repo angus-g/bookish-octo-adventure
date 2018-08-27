@@ -1,7 +1,17 @@
 #version 450 core
 
-out vec4 color;
+in GS_OUT {
+  float depth;
+} fs_in;
+
+out vec3 color;
+
+uniform vec3 u_land_color;
 
 void main() {
-  color = vec4(1.0);
+  if (fs_in.depth >= 0.95) {
+    color = u_land_color;
+  } else {
+    color = vec3(fs_in.depth);
+  }
 }
