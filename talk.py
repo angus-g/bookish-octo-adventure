@@ -42,9 +42,6 @@ class C(g.App):
         points = np.dstack((grid, topog))
         vbo = self.ctx.buffer(points.astype('f4'))
 
-        points_flat = np.dstack((grid, np.zeros(topog.shape)))
-        vbo_flat = self.ctx.buffer(points_flat.astype('f4'))
-
         # the tricky bit: construct the index array
         indices = []
         # loop over all quads
@@ -55,7 +52,6 @@ class C(g.App):
 
         ivbo = self.ctx.buffer(np.asarray(indices, dtype=np.int32))
         self.vao = self.ctx.simple_vertex_array(self.prog, vbo, 'aPos', index_buffer=ivbo)
-        self.vao_flat = self.ctx.simple_vertex_array(self.prog, vbo_flat, 'aPos', index_buffer=ivbo)
 
     def draw_gui(self):
         imgui.begin('Controls')
@@ -87,7 +83,7 @@ class C(g.App):
         # render water surface
         self.prog['u_color'].value = (.3, .3, 1., 0.5)
         self.prog['u_z_offset'].value = 0.01
-        self.vao_flat.render()
+        self.vao.render()
 
 if __name__ == '__main__':
     C().run()
