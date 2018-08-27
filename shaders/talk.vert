@@ -42,6 +42,6 @@ void main() {
   if (depth < 0.05) {
     vs_out.color = u_color;
   } else {
-    vs_out.color = vec4(vec3(depth), 1.0);
+    vs_out.color = vec4(vec3(1.0 - depth), 1.0);
   }
 }

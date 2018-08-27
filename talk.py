@@ -22,7 +22,7 @@ class C(g.App):
                                      geometry_shader=open('shaders/talk.geom').read())
 
         # set up camera
-        self.init_camera([1, 1, 2])
+        self.init_camera([-1, -0.5, 2])
         self.prog['m_mvp'].write(self.camera['mat'])
 
         # load 1deg hgrid, halve the number of points so that the grid agrees with topography
