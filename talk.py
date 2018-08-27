@@ -64,6 +64,9 @@ class C(g.App):
         _, self.gui['u_color'] = imgui.color_edit3('Land', *self.gui['u_color'])
         imgui.end()
 
+        if self.gui['animate']:
+            self.gui['u_unwrap'] = (np.sin(self.time()) + 1) / 2
+
     def render(self):
         self.draw_gui()
         if self.drag_camera():
@@ -72,10 +75,8 @@ class C(g.App):
         self.ctx.clear(0., 0., 0., 0.)
         self.ctx.enable(moderngl.DEPTH_TEST)
         self.ctx.enable(moderngl.BLEND)
-        if self.gui['animate']:
-            self.gui['u_unwrap'] = (np.sin(self.time()) + 1) / 2
 
-        # set uniforms
+        # set uniforms from gui
         self.prog['u_unwrap'].value = self.gui['u_unwrap']
 
         # render topography
