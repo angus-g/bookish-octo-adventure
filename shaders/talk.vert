@@ -10,10 +10,10 @@ out VS_OUT {
 uniform mat4 m_mvp;
 uniform float u_unwrap;
 uniform float u_z_offset;
+uniform float u_separation;
 uniform vec4 u_color;
 
 const float rad_min = 0.8;
-const float separation = 1;
 
 void main() {
   vec4 vPos = vec4(aPos, 1.0);
@@ -27,7 +27,7 @@ void main() {
     vPos.z = -u_z_offset;
   }
 
-  vPos.xy += aQuad * separation;
+  vPos.xy += aQuad * u_separation;
 
   // elevation and azimuth in spherical coords
   float phi = radians(aPos.x * 180 - 100);
