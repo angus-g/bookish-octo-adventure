@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 
-import ctypes
 import g
 import imgui
 import moderngl
 import numpy as np
-import OpenGL.GL as gl
 from pyrr import Matrix44
 
 num_pieces = 15
@@ -40,7 +38,6 @@ class C(g.App):
         data = np.load('data.npz')
         grid = data['grid'][::decimation,::decimation,:]
         ny, nx, _ = grid.shape
-        print(grid.shape)
 
         # load 1deg topography
         # centre nearer australia
@@ -89,9 +86,7 @@ class C(g.App):
         vboq = self.ctx.buffer(np.asarray(quad_buf, dtype=np.float32))
         self.ivbo = self.ctx.buffer(np.asarray(piece_idx, dtype=np.int32))
         self.vao = self.ctx.vertex_array(self.prog, [(vbo, '3f', 'aPos'),
-                                                     (vboq, '2f', 'aQuad')])#, index_buffer=self.ivbo)
-        # bind in the index buffer ourselves for isolating a single piece
-        gl.glBindBuffer(gl.GL_ELEMENT_ARRAY_BUFFER, self.ivbo.glo)
+                                                     (vboq, '2f', 'aQuad')], index_buffer=self.ivbo)
 
     def draw_gui(self):
         imgui.begin('Controls')
@@ -115,33 +110,26 @@ class C(g.App):
         self.ctx.clear(0., 0., 0., 0.)
         self.ctx.enable(moderngl.DEPTH_TEST | moderngl.BLEND | moderngl.CULL_FACE)
 
-        # explicitly bind the VAO just in case we're not rendering through
-        # our VAO object
-        gl.glUseProgram(self.prog.glo)
-        gl.glBindVertexArray(self.vao.glo)
-
         # set uniforms from gui
         self.prog['u_unwrap'].value = self.gui['u_unwrap']
         self.prog['u_separation'].value = self.gui['u_separation']
 
         # calculate offset of selected piece
-        piece_offset = ctypes.c_void_p(self.num_piece_vertices * (self.gui['piece'][0] * num_pieces + self.gui['piece'][1]) * 4)
+        vertices = -1
+        first_vertex = 0
+        if self.gui['isolate']:
+            vertices = self.num_piece_vertices
+            first_vertex = self.num_piece_vertices * (self.gui['piece'][0] * num_pieces + self.gui['piece'][1])
 
         # render topography
         self.prog['u_color'].value = (.1, .1, 0., 1.0)
         self.prog['u_z_offset'].value = 0.
-        if self.gui['isolate']:
-            gl.glDrawElements(gl.GL_TRIANGLES, self.num_piece_vertices, gl.GL_UNSIGNED_INT, piece_offset)
-        else:
-            self.vao.render()
+        self.vao.render(vertices=vertices, first=first_vertex)
 
         # render water surface
         self.prog['u_color'].value = (.3, .3, 1., 0.5)
         self.prog['u_z_offset'].value = 0.01
-        if self.gui['isolate']:
-            gl.glDrawElements(gl.GL_TRIANGLES, self.num_piece_vertices, gl.GL_UNSIGNED_INT, piece_offset)
-        else:
-            self.vao.render()
+        self.vao.render(vertices=vertices, first=first_vertex)
 
 if __name__ == '__main__':
     C().run()
