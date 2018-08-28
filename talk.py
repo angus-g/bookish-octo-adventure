@@ -20,6 +20,7 @@ class C(g.App):
             'animate': False,
             'isolate': False,
             'piece': (num_pieces//2, num_pieces//2),
+            'num_pieces': 1,
         }
 
         # load shaders
@@ -79,7 +80,7 @@ class C(g.App):
         piece_idx = np.empty((num_pieces, num_pieces, self.num_piece_vertices))
         for ix in range(num_pieces):
             for iy in range(num_pieces):
-                piece_idx[ix,iy,:] = piece_idxes['{}.{}'.format(ix, iy)]
+                piece_idx[iy,ix,:] = piece_idxes['{}.{}'.format(ix, iy)]
 
 
         vbo = self.ctx.buffer(np.asarray(point_buf, dtype=np.float32))
@@ -97,6 +98,7 @@ class C(g.App):
         _, self.gui['u_separation'] = imgui.drag_float('Separation', self.gui['u_separation'], 0.01, 0, 1)
         _, self.gui['isolate'] = imgui.checkbox('Isolate', self.gui['isolate'])
         _, self.gui['piece'] = imgui.drag_int2('Piece', *self.gui['piece'], 0.1, 0, num_pieces-1)
+        _, self.gui['num_pieces'] = imgui.drag_int('Num pieces', self.gui['num_pieces'], 0.1, 0)
         imgui.end()
 
         if self.gui['animate']:
@@ -118,8 +120,8 @@ class C(g.App):
         vertices = -1
         first_vertex = 0
         if self.gui['isolate']:
-            vertices = self.num_piece_vertices
-            first_vertex = self.num_piece_vertices * (self.gui['piece'][0] * num_pieces + self.gui['piece'][1])
+            vertices = self.num_piece_vertices * self.gui['num_pieces']
+            first_vertex = self.num_piece_vertices * (self.gui['piece'][1] * num_pieces + self.gui['piece'][0])
 
         # render topography
         self.prog['u_color'].value = (.1, .1, 0., 1.0)
