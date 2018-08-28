@@ -11,6 +11,7 @@ class C(g.App):
         super().__init__(gui=True)
 
         # GUI state variables
+        # these are directly controllable through some kind of GUI element
         self.gui = {
             'u_unwrap': 0,
             'u_separation': 0,
@@ -18,6 +19,8 @@ class C(g.App):
         }
 
         # load shaders
+        # we have a pretty standard vertex-geometry-fragment shader setup
+        # the geometry shader exists only to toggle wireframe on/off
         self.prog = self.ctx.program(vertex_shader=open('shaders/talk.vert').read(),
                                      fragment_shader=open('shaders/talk.frag').read(),
                                      geometry_shader=open('shaders/talk.geom').read())
@@ -30,7 +33,6 @@ class C(g.App):
         decimation = 2
         pieces = 15
         data = np.load('data.npz')
-        #points = grid[::decimation,::decimation,:]
         grid = data['grid'][:-1:decimation,:-1:decimation,:]
         ny, nx, _ = grid.shape
 
@@ -39,6 +41,9 @@ class C(g.App):
         topog = data['topo'][::decimation,::decimation]
         topog = np.repeat(np.repeat(topog, 2, axis=0), 2, axis=1)
 
+        # build up the vertex buffers for vertex positions (hgrid
+        # combined with topo) and the i,j index of the quad to which
+        # the vertex belongs
         points = np.dstack((grid, topog)).reshape(-1, 3)
         point_buf = []
         quad_buf = []
@@ -53,7 +58,6 @@ class C(g.App):
 
         vbo = self.ctx.buffer(np.asarray(point_buf, dtype=np.float32))
         vboq = self.ctx.buffer(np.asarray(quad_buf, dtype=np.float32))
-        #self.vao = self.ctx.simple_vertex_array(self.prog, vbo, 'aPos')
         self.vao = self.ctx.vertex_array(self.prog, [(vbo, '3f', 'aPos'),
                                                      (vboq, '2f', 'aQuad')])
 
