@@ -58,13 +58,13 @@ class App(object):
 
     def update_camera(self, update_proj=False):
         if update_proj:
-            self.camera['proj'] = Matrix44.perspective_projection(45.0, self.width / self.height, 0.1, 1000.0)
+            self.camera['proj'] = Matrix44.perspective_projection(45.0, self.width / self.height, 0.1, 1000.0, dtype='f4')
 
         self.camera['view'] = Matrix44.look_at(self.camera['center'],
                                                self.camera['look_at'],
-                                               self.camera['up'])
+                                               self.camera['up'], dtype='f4')
 
-        self.camera['mat'] = (self.camera['proj'] * self.camera['view']).astype('f4')
+        self.camera['mat'] = self.camera['proj'] * self.camera['view']
 
     def drag_camera(self):
         if not imgui.is_any_item_active():
