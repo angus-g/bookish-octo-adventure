@@ -10,7 +10,7 @@ num_pieces = 15
 
 class C(g.App):
     def __init__(self):
-        super().__init__(gui=True)
+        super().__init__(gui=True, width=1280, height=800)
 
         # GUI state variables
         # these are directly controllable through some kind of GUI element
@@ -22,8 +22,8 @@ class C(g.App):
             'layers': 1,
             'piece': (num_pieces//2, num_pieces//2),
             'num_pieces': 6,
-            'cam_init': (0, -0.5, 2),
-            'cam_final': (0, -1.0, 0.2),
+            'cam_init': (0, -0.5, 4),
+            'cam_final': (0, -1.0, 0),
         }
 
         # load shaders
@@ -117,8 +117,10 @@ class C(g.App):
 
             # look at middle of piece
             x_coord = self.gui['isolate'] * ((self.gui['piece'][0] + self.gui['num_pieces']/2) / num_pieces - 0.5)
+            # avoid some weird perspective stuff
+            z_coord = self.gui['isolate'] * -.3
             cam_pos[0] = x_coord
-            self.camera['look_at'] = (x_coord, 0, 0)
+            self.camera['look_at'] = (x_coord, 0, z_coord)
 
             # update camera
             self.move_camera(cam_pos)
