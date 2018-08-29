@@ -66,6 +66,10 @@ class App(object):
 
         self.camera['mat'] = self.camera['proj'] * self.camera['view']
 
+    def move_camera(self, pos):
+        self.camera['center'] = Vector3(pos)
+        self.camera['saved_center'] = self.camera['center']
+
     def drag_camera(self):
         if not imgui.is_any_item_active():
             mx, my = imgui.get_mouse_drag_delta()

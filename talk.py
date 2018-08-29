@@ -18,10 +18,12 @@ class C(g.App):
             'u_unwrap': 0,
             'u_separation': 0,
             'animate': False,
-            'isolate': False,
+            'isolate': 0,
             'layers': 1,
             'piece': (num_pieces//2, num_pieces//2),
-            'num_pieces': 1,
+            'num_pieces': 6,
+            'cam_init': (0, -0.5, 2),
+            'cam_final': (0, -1.0, 0.2),
         }
 
         # load shaders
@@ -32,7 +34,7 @@ class C(g.App):
                                      geometry_shader=open('shaders/talk.geom').read())
 
         # set up camera
-        self.init_camera([-1, -0.5, 2])
+        self.init_camera(self.gui['cam_init'])
         self.prog['m_mvp'].write(self.camera['mat'])
 
         # load 1deg hgrid, halve the number of points so that the grid agrees with topography
@@ -97,10 +99,9 @@ class C(g.App):
         _, self.gui['animate'] = imgui.checkbox('Animate', self.gui['animate'])
         _, self.gui['u_unwrap'] = imgui.drag_float('Unwrap', self.gui['u_unwrap'], 0.01, 0, 1)
         _, self.gui['u_separation'] = imgui.drag_float('Separation', self.gui['u_separation'], 0.01, 0, 1)
-        _, self.gui['isolate'] = imgui.checkbox('Isolate', self.gui['isolate'])
+        cam_changed, self.gui['isolate'] = imgui.drag_float('Isolate', self.gui['isolate'], 0.01, 0, 1)
         _, self.gui['piece'] = imgui.drag_int2('Piece', *self.gui['piece'], 0.1, 0, num_pieces-1)
         _, self.gui['num_pieces'] = imgui.drag_int('Num pieces', self.gui['num_pieces'], 0.1, 0)
-        imgui.end()
         _, self.gui['layers'] = imgui.drag_int('Layers', self.gui['layers'], 0.1, 0)
 
         if self.gui['animate']:
@@ -109,6 +110,23 @@ class C(g.App):
         # for some reason imgui isn't enforcing these minimums
         self.gui['layers'] = max(self.gui['layers'], 0)
         self.gui['num_pieces'] = max(self.gui['num_pieces'], 0)
+
+        if cam_changed:
+            cam_pos = self.gui['isolate'] * np.array(self.gui['cam_final']) \
+                + (1.0 - self.gui['isolate']) * np.array(self.gui['cam_init'])
+
+            # look at middle of piece
+            x_coord = self.gui['isolate'] * ((self.gui['piece'][0] + self.gui['num_pieces']/2) / num_pieces - 0.5)
+            cam_pos[0] = x_coord
+            self.camera['look_at'] = (x_coord, 0, 0)
+
+            # update camera
+            self.move_camera(cam_pos)
+            self.update_camera()
+            self.prog['m_mvp'].write(self.camera['mat'])
+
+        imgui.end()
+
     def render(self):
         self.draw_gui()
         if self.drag_camera():
@@ -124,7 +142,7 @@ class C(g.App):
         # calculate offset of selected piece
         vertices = -1
         first_vertex = 0
-        if self.gui['isolate']:
+        if self.gui['isolate'] == 1:
             vertices = self.num_piece_vertices * self.gui['num_pieces']
             first_vertex = self.num_piece_vertices * (self.gui['piece'][1] * num_pieces + self.gui['piece'][0])
 
