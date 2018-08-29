@@ -14,17 +14,20 @@ uniform float u_separation;
 uniform vec4 u_color;
 
 const float rad_min = 0.8;
+const float layer_spacing = 0.02;
 
 void main() {
   vec4 vPos = vec4(aPos, 1.0);
-  float depth;
+  float depth = aPos.z / 6000;
   // for drawing a flat sphere (water)
   if (u_z_offset == 0) {
-    depth = aPos.z / 6000;
     vPos.z = -depth / 4;
   } else {
-    depth = 0;
-    vPos.z = -u_z_offset;
+    // calculate z or sigma coordinate
+    vPos.z = -u_z_offset - layer_spacing * gl_InstanceID;
+    // don't penetrate topography
+    vPos.z = max(vPos.z, -depth / 4);
+    depth = 0; // for coloring
   }
 
   vPos.xy += aQuad * u_separation;

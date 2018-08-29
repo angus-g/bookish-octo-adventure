@@ -19,6 +19,7 @@ class C(g.App):
             'u_separation': 0,
             'animate': False,
             'isolate': False,
+            'layers': 1,
             'piece': (num_pieces//2, num_pieces//2),
             'num_pieces': 1,
         }
@@ -100,10 +101,14 @@ class C(g.App):
         _, self.gui['piece'] = imgui.drag_int2('Piece', *self.gui['piece'], 0.1, 0, num_pieces-1)
         _, self.gui['num_pieces'] = imgui.drag_int('Num pieces', self.gui['num_pieces'], 0.1, 0)
         imgui.end()
+        _, self.gui['layers'] = imgui.drag_int('Layers', self.gui['layers'], 0.1, 0)
 
         if self.gui['animate']:
             self.gui['u_unwrap'] = (np.sin(self.time()) + 1) / 2
 
+        # for some reason imgui isn't enforcing these minimums
+        self.gui['layers'] = max(self.gui['layers'], 0)
+        self.gui['num_pieces'] = max(self.gui['num_pieces'], 0)
     def render(self):
         self.draw_gui()
         if self.drag_camera():
@@ -131,7 +136,7 @@ class C(g.App):
         # render water surface
         self.prog['u_color'].value = (.3, .3, 1., 0.5)
         self.prog['u_z_offset'].value = 0.01
-        self.vao.render(vertices=vertices, first=first_vertex)
+        self.vao.render(vertices=vertices, first=first_vertex, instances=self.gui['layers'])
 
 if __name__ == '__main__':
     C().run()
