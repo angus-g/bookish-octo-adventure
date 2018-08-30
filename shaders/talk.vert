@@ -1,10 +1,12 @@
 #version 450 core
 
 in vec3 aPos;
-in vec2 aQuad;
+in vec2 aTexCoord;
 
 out VS_OUT {
   vec4 color;
+  vec3 texCoord;
+  vec2 quad;
 } vs_out;
 
 uniform mat4 m_mvp;
@@ -12,9 +14,11 @@ uniform float u_unwrap;
 uniform float u_z_offset;
 uniform float u_separation;
 uniform vec4 u_color;
+uniform int u_layers;
 
 const float rad_min = 0.8;
 const float layer_spacing = 0.02;
+const int num_pieces = 15;
 
 void main() {
   vec4 vPos = vec4(aPos, 1.0);
@@ -24,13 +28,14 @@ void main() {
     vPos.z = -depth / 4;
   } else {
     // calculate z or sigma coordinate
-    vPos.z = -u_z_offset - layer_spacing * gl_InstanceID;
+    vPos.z = -u_z_offset - layer_spacing * (u_layers - gl_InstanceID);
     // don't penetrate topography
     vPos.z = max(vPos.z, -depth / 4);
     depth = 0; // for coloring
   }
 
-  vPos.xy += aQuad * u_separation;
+  vec2 aQuad = num_pieces * aTexCoord;
+  vPos.xy += (ivec2(aQuad) / (num_pieces - 1.0) - vec2(0.5)) * u_separation;
 
   // elevation and azimuth in spherical coords
   float phi = radians(aPos.x * 180 - 100);
@@ -42,6 +47,9 @@ void main() {
 		   1);
   
   gl_Position = m_mvp * mix(sPos, vPos, u_unwrap);
+  vs_out.texCoord = vec3(aTexCoord, u_layers - gl_InstanceID);
+  vs_out.quad = aQuad;
+
   if (depth < 0.05) {
     vs_out.color = u_color;
   } else {

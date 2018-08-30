@@ -4,6 +4,8 @@ import g
 import imgui
 import moderngl
 import numpy as np
+import xarray as xr
+from matplotlib import cm
 from pyrr import Matrix44
 
 num_pieces = 15
@@ -55,22 +57,23 @@ class C(g.App):
         # the vertex belongs
         points = np.dstack((grid, topog)).reshape(-1, 3)
         point_buf = []
-        quad_buf = []
+        texcoord_buf = []
         piece_idxes = {}
         cur_idx = 0
         for ix in range(nx - 1):
             for iy in range(ny - 1):
-                indices = [iy*nx + ix,   iy*nx + ix+1,     (iy+1)*nx + ix,
-                           iy*nx + ix+1, (iy+1)*nx + ix+1, (iy+1)*nx + ix]
-
-                # associate this quad with a discrete piece
-                piece = [min(num_pieces-1, int(num_pieces * ix / (nx-2))),
-                         min(num_pieces-1, int(num_pieces * iy / (ny-2)))]
+                coords = [(ix,   iy), (ix+1, iy),   (ix, iy+1),
+                          (ix+1, iy), (ix+1, iy+1), (ix, iy+1)]
+                indices = [ix + iy*nx for ix, iy in coords]
 
                 # actual vertices of the quad by indexing into our vertices
                 point_buf.extend(points[i] for i in indices)
-                # index of this quad (for "exploding" effect)
-                quad_buf.extend([p / (num_pieces-1) - 0.5 for p in piece] * 6)
+                # do we calculate the texture coordinate per-vertex or per-face?
+                #texcoord_buf.extend([(ix/(nx-1), iy/(ny-1)) for ix, iy in coords])
+                texcoord_buf.extend([(ix/(nx-1), iy/(ny-1))] * 6)
+
+                piece = (int(num_pieces * ix/(nx-1)),
+                         int(num_pieces * iy/(ny-1)))
 
                 # we could do this analytically, but I'm lazy
                 k = '{}.{}'.format(*piece)
@@ -85,12 +88,27 @@ class C(g.App):
             for iy in range(num_pieces):
                 piece_idx[iy,ix,:] = piece_idxes['{}.{}'.format(ix, iy)]
 
+        # load potrho data as a texture
+        d_potrho = xr.open_dataset('data/ocean-potrho.nc')
+        potrho = d_potrho.pot_rho_2.isel(time=0, st_ocean=range(0,50,5))
+        # normalise to range 0-1
+        potrho -= potrho.min()
+        potrho /= potrho.max()
+        potrho = potrho.roll(xt_ocean=90)
+        # map into a texture by looking up in colormap
+        bytes_potrho = b''
+        for i in range(10):
+            bytes_potrho += cm.viridis(potrho.isel(st_ocean=i), bytes=True)[...,:3].tobytes()
+        tex_potrho = self.ctx.texture_array(potrho.shape[::-1], 3, bytes_potrho)
+        tex_potrho.filter = (moderngl.NEAREST, moderngl.NEAREST)
+        # this is our only texture for the moment
+        tex_potrho.use()
 
         vbo = self.ctx.buffer(np.asarray(point_buf, dtype=np.float32))
-        vboq = self.ctx.buffer(np.asarray(quad_buf, dtype=np.float32))
+        vbot = self.ctx.buffer(np.asarray(texcoord_buf, dtype=np.float32))
         self.ivbo = self.ctx.buffer(np.asarray(piece_idx, dtype=np.int32))
         self.vao = self.ctx.vertex_array(self.prog, [(vbo, '3f', 'aPos'),
-                                                     (vboq, '2f', 'aQuad')], index_buffer=self.ivbo)
+                                                     (vbot, '2f', 'aTexCoord')], index_buffer=self.ivbo)
 
     def draw_gui(self):
         imgui.begin('Controls')
@@ -134,8 +152,9 @@ class C(g.App):
         if self.drag_camera():
             self.prog['m_mvp'].write(self.camera['mat'])
 
-        self.ctx.clear(0., 0., 0., 0.)
+        self.ctx.clear(.2, .2, .2, 0.)
         self.ctx.enable(moderngl.DEPTH_TEST | moderngl.BLEND | moderngl.CULL_FACE)
+        self.ctx.blend_func = moderngl.SRC_ALPHA, moderngl.ONE_MINUS_SRC_ALPHA
 
         # set uniforms from gui
         self.prog['u_unwrap'].value = self.gui['u_unwrap']
@@ -149,13 +168,16 @@ class C(g.App):
             first_vertex = self.num_piece_vertices * (self.gui['piece'][1] * num_pieces + self.gui['piece'][0])
 
         # render topography
+        self.prog['use_tex'].value = False
         self.prog['u_color'].value = (.1, .1, 0., 1.0)
         self.prog['u_z_offset'].value = 0.
         self.vao.render(vertices=vertices, first=first_vertex)
 
         # render water surface
+        self.prog['use_tex'].value = True
         self.prog['u_color'].value = (.3, .3, 1., 0.5)
         self.prog['u_z_offset'].value = 0.01
+        self.prog['u_layers'].value = self.gui['layers']
         self.vao.render(vertices=vertices, first=first_vertex, instances=self.gui['layers'])
 
 if __name__ == '__main__':
