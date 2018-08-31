@@ -1,0 +1,56 @@
+#+TITLE: Adaptive coordinate thesis talk outline
+* Abstract
+An adaptive vertical coordinate for ocean modelling
+
+Ocean models are used in a large variety of applications, from
+research to industry: climate projections, shipping forecasts, or even
+enhancing our understanding of the physical processes. These models
+are numerical realisations of the physical equations, and by their
+nature there are limits on their precision. As a consequence,
+numerical limitations manifest in the solutions to the equations as
+undesirable or unphysical results. In particular, I'm looking at
+"spurious" mixing that can affect the ocean circulation in the
+models. I have created a new method for narrowing down the
+contributions to mixing in an ocean model. This motivated work to
+develop a new way of representing the vertical structure of the ocean
+within the model, which aims to reduce the spurious mixing and make
+better use of the available resolution. This method is dynamic, and I
+have therefore termed it the "adaptive vertical coordinate".
+
+* Overall structure
+** Intro to ocean modelling (10 min)
+I think this, and the following section should be quite visual. We don't need to be
+particularly quantitative, but keeping things visual and interactive should keep
+the attention of the audience.
+
+- show a "continuous"-space ocean model on a sphere, unwrap to flat space, then
+spread out to show the individual cells (I have a demo of this)
+- explain uses of ocean models (maybe some concrete examples from the group?)
+- mixing plays a role in climate and ecosystems (but also heat/carbon uptake)
+- example coordinates (this is also shown in the demo)
+
+** Negative consequences of spurious mixing (5 min)
+This might be more difficult to represent in the interactive framework. We have some
+physical results like incorrect heat/carbon uptake, overturning circulation, etc.
+However, perhaps the interactive demonstration in the next section would be more
+illuminating?
+
+** Show that we can quantify spurious mixing (doesn't need to be super detailed -- 5 min)
+I think this would work well as a little schematic/model: draw an analogue for potential
+energy for a discrete mass (animate a ball over the ocean surface). Represent a column
+or the domain as a bunch of discrete volumes. Then we can show how this doesn't work
+because of the BPE/APE split -- lock-exchange kind of simulation.
+- briefly mention that I extended this technique to separate horizontal and vertical
+- use this as a segue to next section -- coordinate influences the horizontal component, flow
+  wants to follow isopycnals (mainly), so if we get that right, we'll improve on the mixing
+
+** Propose adaptive coordinate as a solution (15-20 min)
+- highlight that the horizontal coordinate is unchanging, but we have control over the
+  vertical coordinate
+- introduce the idea that flow wants to follow isopycnals
+- as a follow-on, mention that isopycnal coordinates do exist (caveats?)
+- our primary aim is to dynamically follow an isopycnal -- illustrate density adaptivity flux (we can make this interactive)
+- when it doesn't make sense to follow an isopycnal, smooth the coordinate out
+
+
+** Conclusion (5 min)
