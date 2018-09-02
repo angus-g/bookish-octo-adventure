@@ -1,4 +1,5 @@
-#+TITLE: Adaptive coordinate thesis talk outline
+#+TITLE: Adaptive coordinate for ocean modelling
+#+AUTHOR: Angus Gibson
 * Abstract
 An adaptive vertical coordinate for ocean modelling
 
@@ -54,3 +55,72 @@ because of the BPE/APE split -- lock-exchange kind of simulation.
 
 
 ** Conclusion (5 min)
+
+* Slides
+** Adaptive coordinate for ocean modelling
+(title slide)
+
+** Introduction
+Ocean models are widely used in a variety of applications
+e.g. climate projections, shipping forecast, surf forecast, from idealised process studies through to regional, to global, to long timescales
+
+** Implementation
+Ocean models are typically numerical realisations of the equations governing fluid dynamics, coupled with a suite of approximations for
+sub-processes
+(introduce first part of animation: we might imagine our pale blue dot with currents swirling around, but the reality is
+we have a bunch of grid points)
+
+** Dynamics within the model
+Each of these cells is distinct, with currents flowing between adjacent cells
+If we look at a vertical slice, we see a similar picture: distinct layers
+(zoom in to isolated slice)
+
+** Introducing mixing
+Let's take a step back and look at one important process in the ocean: mixing. Currents tend to follow
+surfaces of constant density, and don't mix significantly between them without other processes.
+(show density profile of slice, with isopycnal contours)
+
+** The role of mixing
+That's not to say that mixing doesn't occur: indeed, it is a very important process, and strongly affects circulation and other key
+climatic drivers, such as the uptake of heat or carbon into the deep ocean (figure?)
+
+** Spurious mixing
+Whenever we advect water between cells of different density, we lose some information. Perhaps confusingly, the vertical coordinate
+strongly affects this (overlay coordinate on isopycnal contours)
+
+** Coordinates
+We can choose a coordinate that follows an isopycnal, but because the surface is weakly-stratified, we lose resolution there (figure?)
+
+** Quantifying spurious mixing
+This was the focus of the first part of my thesis. First, I'll demonstrate a technique by which we can quantify spurious mixing, and how
+I extended this to give us more information about the processes within the model contributing to spurious mixing.
+
+** Potential energy analogue
+We know the definition of potential energy for a point mass. This can be extended to a fluid by integrating over the fluid domain. However,
+we can see the difference between two domains with the same potential energy, one completely mixed and the other separated. The information
+we're missing is the partitioning of potential energy between the amount that is still available to do work, and the remaining "background"
+component. This technique is limited, as we can't impose any explicit mixing, or any forcing that would affect the overall potential energy
+in the domain.
+
+** Decomposing spurious mixing contributions
+My extension to this technique was to partition the contributions to spurious mixing from horizontal and vertical advection, through careful
+accounting. This motivated a focus on vertical processes, in particular the vertical coordinate used in the model.
+
+** Proposing a new vertical coordinate -- the "adaptive" coordinate
+As I've already discussed, with a coordinate that follows isopycnals we can significantly reduce the spurious mixing resulting from
+horizontal advection. There are a couple of limitations of isopycnal coordinates: their representation of the well-mixing surface layer is
+very coarse, but we need fine resolution here to represent the near-surface dynamics; since the densities vary significantly through the
+ocean, we may be wasting a lot of space/effort solving our equations in vanished layers.
+
+** Other coordinates
+There are other adaptive coordinates, but they haven't been employed in large-scale ocean modelling. These coordinates are more suitable
+to coastal modelling, but alter resolution 
+
+** Primary component: density adaptivity
+The main component to the coordinate is a response to the local density, so that the coordinate follows an isopycnal without specifying which one.
+
+** Second component: lateral smoothing
+In some regions, it doesn't make sense to try to follow an isopycnal, because the stratification is weak. In these regions, we instead just
+smooth the coordinate between neighbouring columns.
+
+The other important use of this component is to break "tangles"
